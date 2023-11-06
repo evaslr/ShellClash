@@ -1,0 +1,220 @@
+Debian12 下使用shellclash完整教程
+
+
+
+
+
+如果你在安装Debian时设置了HTTP代理服务器作为安装源，并且现在想要取消这个设置，你可以按照以下步骤进行：
+
+1. 以root用户登录到Debian系统中。
+2. 执行以下命令来编辑`/etc/apt/apt.conf`文件：
+   
+   sudo nano /etc/apt/apt.conf
+   
+   如果文件不存在，则创建一个新文件。
+3. 在打开的文件中，查找包含代理设置的行。这些行可能类似于以下内容：
+   
+   Acquire::http::Proxy "http://your-proxy-server:port";
+   Acquire::https::Proxy "https://your-proxy-server:port";
+   
+   如果找到了这样的行，请注释掉它们（在行的开头添加`#`符号）或者删除它们。
+4. 保存并关闭文件。
+5. 执行以下命令来更新APT缓存：
+   
+   sudo apt update
+   
+
+这样，你的Debian系统将不再使用HTTP代理服务器作为安装源。
+
+如果你在`/etc/apt/apt.conf.d/`目录下有其他代理设置文件（例如`proxy.conf`），也可以编辑或删除这些文件以取消代理设置。
+
+
+
+
+
+先查看ip网卡名字
+命令：ip a
+
+cd /etc/network
+cd interfaces.d/
+touch enp1s0#网卡名字
+nano enp1s0
+输入下面的静态ip
+
+auto enp1s0
+iface enp1s0 inet static
+address 192.168.124.3
+netmask 255.255.255.0
+gateway 192.168.124.1
+
+修改dns
+nano /etc/resolv.conf
+
+最后重启网卡
+/etc/init.d/networking restart
+
+
+
+nano /etc/apt/sources.list
+腾讯源
+debian10.x（buster）
+deb https://mirrors.cloud.tencent.com/debian/ buster main contrib non-free
+deb https://mirrors.cloud.tencent.com/debian/ buster-updates main contrib non-free
+deb https://mirrors.cloud.tencent.com/debian/ buster-backports main contrib non-free
+deb https://mirrors.cloud.tencent.com/debian-security buster/updates main contrib non-free
+deb-src https://mirrors.cloud.tencent.com/debian/ buster main contrib non-free
+deb-src https://mirrors.cloud.tencent.com/debian/ buster-updates main contrib non-free
+deb-src https://mirrors.cloud.tencent.com/debian/ buster-backports main contrib non-free
+deb-src https://mirrors.cloud.tencent.com/debian-security buster/updates main contrib non-free
+更新缓存
+apt-get clean all
+apt-get update
+
+
+配置Debian允许root用户登陆GNOME桌面环境
+1、普通用户登录su - root
+
+2、vi /etc/gdm3/daemon.conf
+在 security 下面添加 AllowRoot=true
+保存后退出vi
+3、vi /etc/pam.d/gdm-password
+
+注释掉这一行 auth required pam_succeed_if.so user != root quiet_success
+#auth required pam_succeed_if.so user != root quiet_success
+保存后退出vi
+
+4、重新以root登录即可
+
+
+
+
+
+
+开启 Linux 内核的转发功能
+
+编辑配置文件 /etc/sysctl.conf 并向其中添加如下内容
+nano /etc/sysctl.conf
+
+net.ipv4.ip_forward=1
+
+保存退出后，执行以下命令使修改生效
+sysctl -p
+查看 /proc/sys/net/ipv4/ip_forward 的内容，如果是 1 表示设置成功生效
+
+使用 nftables 替代 iptables 做流量转发
+Debian12 默认安装了
+安装 nftables
+apt -y install nftables
+
+创建 nftables 配置文件扩展目录
+mkdir /etc/nftables.conf.d
+
+
+创建私有地址的定义文件
+nano /etc/nftables.conf.d/private.nft
+
+define private_list = {
+    0.0.0.0/8,
+    10.0.0.0/8,
+    127.0.0.0/8,
+    169.254.0.0/16,
+    172.16.0.0/12,
+    192.168.0.0/16,
+    224.0.0.0/4,
+    240.0.0.0/4
+}
+
+
+修改 nftalbes 配置文件，内容如下
+nano /etc/nftables.conf
+
+#!/usr/sbin/nft -f
+
+include "/etc/nftables.conf.d/private.nft"
+
+table ip nat {
+    chain proxy {
+        ip daddr $private_list return
+            ip protocol tcp redirect to :7892
+    }
+    chain prerouting {
+        type nat hook prerouting priority 0; policy accept;
+        jump proxy
+    }
+}
+
+
+清空 nftalbes 规则，并使新规则生效
+nft flush ruleset
+nft -f /etc/nftables.conf
+
+查看 nftalbes 当前规则
+nft list ruleset
+
+设置 nftalbes 开机自启动
+systemctl enable nftables
+
+以上做完接下来本地安装shellclash
+
+
+
+方法一
+通过搭建本地web服务器的方式一键安装：
+在window下将项目克隆到本地（或点击下载项目源码zip包到本地后解压）
+ShellClash-master.zip  压缩包里面包含不同设备的内核以及面板ui
+
+打开 /ShellClash/bin/hfs/hfs.exe
+
+点击菜单-从磁盘添加目录-{找到ShellClash源码所在目录}-添加为真实目录
+
+点击菜单-IP地址-{选择你局域网的实际IP地址}
+
+标准Linux设备安装：
+sudo -i #切换到root用户，如果需要密码，请输入密码
+bash #如已处于bash环境可跳过
+export url='将本地web地址粘贴在这里' && wget -q --no-check-certificate -O /tmp/install.sh $url/install.sh  && bash /tmp/install.sh && source /etc/profile &> /dev/null
+
+或者
+sudo -i #切换到root用户，如果需要密码，请输入密码
+bash #如已处于bash环境可跳过
+export url='将本地web地址粘贴在这里' && bash -c "$(curl -kfsSl $url/install.sh)" && source /etc/profile &> /dev/null
+
+路由设备使用curl安装：
+export url='将本地web地址粘贴在这里' && sh -c "$(curl -kfsSl $url/install.sh)" && source /etc/profile &> /dev/null
+
+
+路由设备使用wget安装：
+#GitHub源(可能需要代理)
+export url='将本地web地址粘贴在这里' && wget -q --no-check-certificate -O /tmp/install.sh $url/install.sh  && sh /tmp/install.sh && source /etc/profile &> /dev/null
+
+老旧设备使用低版本wge安装：
+export url='将本地web地址粘贴在这里' && wget -q -O /tmp/install.sh $url/install.sh  && sh /tmp/install.sh && source /etc/profile &> /dev/null
+
+
+
+
+方法二
+
+下载本地安装包文件ShellClash.tar.gz
+将该压缩文件（请勿解压）使用WinSCP或其他SCP客户端上传至设备/tmp目录
+
+运行OpenWrt或其他非标准Linux系统的设备（主要是各类路由器），请使用如下命令安装：
+mkdir -p /tmp/SC_tmp && tar -zxf '/tmp/ShellClash.tar.gz' -C /tmp/SC_tmp/ && source /tmp/SC_tmp/init.sh 
+
+
+运行标准Linux系统的设备则使用如下命令进行安装：
+sudo -i #如提示输入密码，请输入用户密码
+mkdir -p /tmp/SC_tmp && tar -zxf '/tmp/ShellClash.tar.gz' -C /tmp/SC_tmp/ && bash /tmp/SC_tmp/init.sh && source /etc/profile >/dev/null
+
+
+通过WinSCP或其他SCP客户端手动上传内核单独安装/升级内核：
+内核名字修改成clash.meta-linux-amd64
+之后将该文件使用WinSCP或其他SCP客户端上传至/tmp  把它权限修改成777
+需要启动clash，然后他会下载核心，取消下载继续启动才会识别
+
+
+
+在SSH中直接运行clash命令
+clash
+
+参考提示完成安装
